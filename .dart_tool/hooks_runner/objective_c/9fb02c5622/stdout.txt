@@ -1,0 +1,55 @@
+Running `(cd /Users/aboidrees/.pub-cache/hosted/pub.dev/objective_c-9.5.0/; ANDROID_HOME=/Users/aboidrees/Library/Android/sdk TMPDIR=/var/folders/b9/3fm7hhws2ws2hfqklx_f006h0000gn/T/ PATH=/Users/aboidrees/Library/google-cloud-sdk/bin:/opt/homebrew/opt/openjdk@21/bin:/opt/homebrew/opt/mysql-client/bin:/Users/aboidrees/Library/Python/3.9/bin:/Users/aboidrees/.nvm/versions/node/v22.15.0/bin:/Users/aboidrees/.gem/bin:/Users/aboidrees/development/flutter/bin:/Users/aboidrees/.gemini/antigravity-ide/bin:/Users/aboidrees/.opencode/bin:/Users/aboidrees/.local/bin:/Users/aboidrees/.antigravity-ide/antigravity-ide/bin:/Users/aboidrees/go/bin:/Users/aboidrees/.antigravity/antigravity/bin:/Users/aboidrees/.bun/bin:/Users/aboidrees/.antigravity/antigravity/bin:/opt/homebrew/opt/libpq/bin:/Users/aboidrees/Library/google-cloud-sdk/bin:/Users/aboidrees/.local/bin:/Users/aboidrees/.nvm/versions/node/v22.15.0/bin:/opt/homebrew/bin:/opt/homebrew/sbin:/usr/local/bin:/System/Cryptexes/App/usr/bin:/usr/bin:/bin:/usr/sbin:/sbin:/var/run/com.apple.security.cryptexd/codex.system/bootstrap/usr/local/bin:/var/run/com.apple.security.cryptexd/codex.system/bootstrap/usr/bin:/var/run/com.apple.security.cryptexd/codex.system/bootstrap/usr/appleinternal/bin:/pkg/env/global/bin:/Library/Apple/usr/bin:/usr/local/MacGPG2/bin:/Applications/Wireshark.app/Contents/MacOS:/Applications/VMware Fusion.app/Contents/Public:/Users/aboidrees/Library/google-cloud-sdk/bin:/opt/homebrew/opt/openjdk@21/bin:/opt/homebrew/opt/mysql-client/bin:/Users/aboidrees/.rover/bin:/Users/aboidrees/Library/Python/3.9/bin:/Users/aboidrees/.nvm/versions/node/v22.15.0/bin:/Users/aboidrees/.gem/bin:/Users/aboidrees/development/flutter/bin:/Users/aboidrees/Library/Android/sdk/emulator:/Users/aboidrees/Library/Android/sdk/tools:/Users/aboidrees/Library/Android/sdk/tools/bin:/Users/aboidrees/Library/Android/sdk/platform-tools:/Users/aboidrees/.pub-cache/bin:/Users/aboidrees/.platformio/penv/bin:/opt/metasploit-framework/bin:/Users/aboidrees/.local/bin:/Users/aboidrees/go/bin:/Users/aboidrees/go/bin:/Users/aboidrees/go/bin:/Users/aboidrees/go/bin:/Users/aboidrees/go/bin:/Users/aboidrees/Library/Android/sdk/emulator:/Users/aboidrees/Library/Android/sdk/tools:/Users/aboidrees/Library/Android/sdk/tools/bin:/Users/aboidrees/Library/Android/sdk/platform-tools:/Users/aboidrees/.pub-cache/bin:/Users/aboidrees/.platformio/penv/bin:/opt/metasploit-framework/bin:/Users/aboidrees/.local/bin HOME=/Users/aboidrees ANDROID_NDK=/Users/aboidrees/Library/Android/sdk/ndk/27.0.12077973 /Users/aboidrees/development/flutter/bin/cache/dart-sdk/bin/dart --packages=/Users/aboidrees/development/safestream/packages/safestream_player/.dart_tool/package_config.json /Users/aboidrees/development/safestream/packages/safestream_player/.dart_tool/hooks_runner/objective_c/9fb02c5622/hook.dill --config=/Users/aboidrees/development/safestream/packages/safestream_player/.dart_tool/hooks_runner/objective_c/9fb02c5622/input.json )`.
+INFO: 2026-08-12 16:14:48.400685: No compiler set in BuildInput.cCompiler.cc. Falling back to assuming clang is in the PATH.
+
+INFO: 2026-08-12 16:14:48.405746: Running: clang -isysroot /Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX26.4.sdk -target arm64-apple-darwin -mmacos-version-min=12 -c /Users/aboidrees/.pub-cache/hosted/pub.dev/objective_c-9.5.0/src/include/dart_api_dl.c -fpic -gline-tables-only -I src -o /Users/aboidrees/development/safestream/packages/safestream_player/.dart_tool/hooks_runner/shared/objective_c/build/9fb02c5622/obj/src/include/dart_api_dl.c.o
+
+INFO: 2026-08-12 16:14:48.406968: Running: clang -isysroot /Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX26.4.sdk -target arm64-apple-darwin -mmacos-version-min=12 -c /Users/aboidrees/.pub-cache/hosted/pub.dev/objective_c-9.5.0/src/objective_c.c -fpic -gline-tables-only -I src -o /Users/aboidrees/development/safestream/packages/safestream_player/.dart_tool/hooks_runner/shared/objective_c/build/9fb02c5622/obj/src/objective_c.c.o
+
+INFO: 2026-08-12 16:14:48.407146: Running: clang -isysroot /Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX26.4.sdk -target arm64-apple-darwin -mmacos-version-min=12 -x objective-c -fobjc-arc -c /Users/aboidrees/.pub-cache/hosted/pub.dev/objective_c-9.5.0/src/input_stream_adapter.m -fpic -gline-tables-only -I src -o /Users/aboidrees/development/safestream/packages/safestream_player/.dart_tool/hooks_runner/shared/objective_c/build/9fb02c5622/obj/src/input_stream_adapter.m.o
+
+INFO: 2026-08-12 16:14:48.407250: Running: clang -isysroot /Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX26.4.sdk -target arm64-apple-darwin -mmacos-version-min=12 -x objective-c -fobjc-arc -c /Users/aboidrees/.pub-cache/hosted/pub.dev/objective_c-9.5.0/src/objective_c.m -fpic -gline-tables-only -I src -o /Users/aboidrees/development/safestream/packages/safestream_player/.dart_tool/hooks_runner/shared/objective_c/build/9fb02c5622/obj/src/objective_c.m.o
+
+INFO: 2026-08-12 16:14:48.407346: Running: clang -isysroot /Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX26.4.sdk -target arm64-apple-darwin -mmacos-version-min=12 -x objective-c -fobjc-arc -c /Users/aboidrees/.pub-cache/hosted/pub.dev/objective_c-9.5.0/src/observer.m -fpic -gline-tables-only -I src -o /Users/aboidrees/development/safestream/packages/safestream_player/.dart_tool/hooks_runner/shared/objective_c/build/9fb02c5622/obj/src/observer.m.o
+
+
+
+INFO: 2026-08-12 16:14:48.407588: Running: clang -isysroot /Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX26.4.sdk -target arm64-apple-darwin -mmacos-version-min=12 -x objective-c -fobjc-arc -c /Users/aboidrees/.pub-cache/hosted/pub.dev/objective_c-9.5.0/src/protocol.m -fpic -gline-tables-only -I src -o /Users/aboidrees/development/safestream/packages/safestream_player/.dart_tool/hooks_runner/shared/objective_c/build/9fb02c5622/obj/src/protocol.m.o
+
+INFO: 2026-08-12 16:14:48.407712: Running: clang -isysroot /Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX26.4.sdk -target arm64-apple-darwin -mmacos-version-min=12 -x objective-c -fobjc-arc -c /Users/aboidrees/.pub-cache/hosted/pub.dev/objective_c-9.5.0/src/objective_c_bindings_generated.m -fpic -gline-tables-only -I src -o /Users/aboidrees/development/safestream/packages/safestream_player/.dart_tool/hooks_runner/shared/objective_c/build/9fb02c5622/obj/src/objective_c_bindings_generated.m.o
+
+INFO: 2026-08-12 16:14:48.697575: 
+INFO: 2026-08-12 16:14:48.697653: 
+INFO: 2026-08-12 16:14:48.697679: Generated /Users/aboidrees/development/safestream/packages/safestream_player/.dart_tool/hooks_runner/shared/objective_c/build/9fb02c5622/obj/src/observer.m.o
+
+INFO: 2026-08-12 16:14:48.697997: Generated /Users/aboidrees/development/safestream/packages/safestream_player/.dart_tool/hooks_runner/shared/objective_c/build/9fb02c5622/obj/src/include/dart_api_dl.c.o
+
+INFO: 2026-08-12 16:14:48.698260: 
+INFO: 2026-08-12 16:14:48.698286: 
+
+INFO: 2026-08-12 16:14:48.698325: Generated /Users/aboidrees/development/safestream/packages/safestream_player/.dart_tool/hooks_runner/shared/objective_c/build/9fb02c5622/obj/src/objective_c.c.o
+
+INFO: 2026-08-12 16:14:48.698979: Generated /Users/aboidrees/development/safestream/packages/safestream_player/.dart_tool/hooks_runner/shared/objective_c/build/9fb02c5622/obj/src/protocol.m.o
+
+INFO: 2026-08-12 16:14:48.976280: 
+INFO: 2026-08-12 16:14:48.976350: 
+INFO: 2026-08-12 16:14:48.976369: Generated /Users/aboidrees/development/safestream/packages/safestream_player/.dart_tool/hooks_runner/shared/objective_c/build/9fb02c5622/obj/src/ns_number.m.o
+
+INFO: 2026-08-12 16:14:48.989621: 
+INFO: 2026-08-12 16:14:48.989659: 
+INFO: 2026-08-12 16:14:48.989670: Generated /Users/aboidrees/development/safestream/packages/safestream_player/.dart_tool/hooks_runner/shared/objective_c/build/9fb02c5622/obj/src/input_stream_adapter.m.o
+
+INFO: 2026-08-12 16:14:48.990410: 
+INFO: 2026-08-12 16:14:48.990430: 
+
+INFO: 2026-08-12 16:14:48.990439: Generated /Users/aboidrees/development/safestream/packages/safestream_player/.dart_tool/hooks_runner/shared/objective_c/build/9fb02c5622/obj/src/objective_c.m.o
+
+INFO: 2026-08-12 16:14:49.022195: 
+INFO: 2026-08-12 16:14:49.022231: 
+INFO: 2026-08-12 16:14:49.022241: Generated /Users/aboidrees/development/safestream/packages/safestream_player/.dart_tool/hooks_runner/shared/objective_c/build/9fb02c5622/obj/src/objective_c_bindings_generated.m.o
+
+INFO: 2026-08-12 16:14:49.022500: Running: clang -shared -Wl,-encryptable -undefined dynamic_lookup -isysroot /Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX26.4.sdk -target arm64-apple-darwin -mmacos-version-min=12 /Users/aboidrees/development/safestream/packages/safestream_player/.dart_tool/hooks_runner/shared/objective_c/build/9fb02c5622/obj/src/include/dart_api_dl.c.o /Users/aboidrees/development/safestream/packages/safestream_player/.dart_tool/hooks_runner/shared/objective_c/build/9fb02c5622/obj/src/objective_c.c.o /Users/aboidrees/development/safestream/packages/safestream_player/.dart_tool/hooks_runner/shared/objective_c/build/9fb02c5622/obj/src/input_stream_adapter.m.o /Users/aboidrees/development/safestream/packages/safestream_player/.dart_tool/hooks_runner/shared/objective_c/build/9fb02c5622/obj/src/objective_c.m.o /Users/aboidrees/development/safestream/packages/safestream_player/.dart_tool/hooks_runner/shared/objective_c/build/9fb02c5622/obj/src/observer.m.o /Users/aboidrees/development/safestream/packages/safestream_player/.dart_tool/hooks_runner/shared/objective_c/build/9fb02c5622/obj/src/ns_number.m.o /Users/aboidrees/development/safestream/packages/safestream_player/.dart_tool/hooks_runner/shared/objective_c/build/9fb02c5622/obj/src/protocol.m.o /Users/aboidrees/development/safestream/packages/safestream_player/.dart_tool/hooks_runner/shared/objective_c/build/9fb02c5622/obj/src/objective_c_bindings_generated.m.o -o /Users/aboidrees/development/safestream/packages/safestream_player/.dart_tool/hooks_runner/shared/objective_c/build/9fb02c5622/objective_c.dylib
+
+INFO: 2026-08-12 16:14:49.172080: 
+INFO: 2026-08-12 16:14:49.172132: 
+INFO: 2026-08-12 16:14:49.172144: Generated /Users/aboidrees/development/safestream/packages/safestream_player/.dart_tool/hooks_runner/shared/objective_c/build/9fb02c5622/objective_c.dylib
+

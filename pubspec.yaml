@@ -1,0 +1,21 @@
+name: safestream_player
+description: A shared Flutter package for extracting and playing raw YouTube video streams.
+version: 1.0.0
+publish_to: none
+
+environment:
+  sdk: '>=3.0.0 <4.0.0'
+  flutter: ">=3.0.0"
+
+dependencies:
+  flutter:
+    sdk: flutter
+  youtube_explode_dart: ^3.1.0
+  video_player: ^2.9.2
+  chewie: ^1.8.5
+  just_audio: ^0.10.6
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^4.0.0
