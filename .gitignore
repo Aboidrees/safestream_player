@@ -1,0 +1,11 @@
+# Flutter / Dart gitignore
+.dart_tool/
+.flutter-plugins
+.flutter-plugins-dependencies
+.pub-cache/
+.pub/
+build/
+*.aab
+*.apk
+*.keystore
+EOF
