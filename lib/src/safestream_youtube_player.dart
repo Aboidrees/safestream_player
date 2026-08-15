@@ -56,16 +56,28 @@ class _SafeStreamYoutubePlayerState extends State<SafeStreamYoutubePlayer> {
       muxedStreams.sort((a, b) => b.videoQuality.index.compareTo(a.videoQuality.index));
       _qualityTracks = muxedStreams;
 
-      // Select default stream (best quality muxed or explicitly selected)
+      // Select default stream: prioritize smooth 720p/480p streams for TV hardware compatibility
       final VideoStreamInfo streamInfo = _selectedQualityTrack ??
-          (muxedStreams.isNotEmpty ? muxedStreams.first : manifest.muxed.bestQuality);
+          muxedStreams.firstWhere(
+            (s) => s.qualityLabel.contains('720') || s.qualityLabel.contains('480'),
+            orElse: () => muxedStreams.isNotEmpty ? muxedStreams.first : manifest.muxed.bestQuality,
+          );
       _selectedQualityTrack = streamInfo;
 
       // Extract audio tracks
       _audioTracks = manifest.audioOnly.toList();
 
-      // 2. Initialize VideoPlayerController
-      final newVideoController = VideoPlayerController.networkUrl(streamInfo.url);
+      // 2. Initialize VideoPlayerController with streaming headers to prevent throttling
+      final newVideoController = VideoPlayerController.networkUrl(
+        streamInfo.url,
+        httpHeaders: const {
+          'User-Agent': 'Mozilla/5.0 (Linux; Android 11; Mobile) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/90.0.4430.91 Mobile Safari/537.36',
+          'Accept': '*/*',
+          'Accept-Encoding': 'identity',
+          'Connection': 'keep-alive',
+        },
+        videoPlayerOptions: VideoPlayerOptions(mixWithOthers: true),
+      );
       await newVideoController.initialize();
       if (!mounted) {
         newVideoController.dispose();
@@ -87,9 +99,11 @@ class _SafeStreamYoutubePlayerState extends State<SafeStreamYoutubePlayer> {
         widget.onControllerCreated!(_videoPlayerController!);
       }
 
-      // Initialize or reset AudioPlayer
-      _audioPlayer ??= AudioPlayer();
-      _videoPlayerController!.addListener(_syncAudioWithVideo);
+      // Only attach audio sync listener if an alternate audio track is selected
+      if (_selectedAudioTrack != null) {
+        _audioPlayer ??= AudioPlayer();
+        _videoPlayerController!.addListener(_syncAudioWithVideo);
+      }
 
       // 3. Setup ChewieController with Quality and Language options
       _chewieController?.dispose();
@@ -225,6 +239,8 @@ class _SafeStreamYoutubePlayerState extends State<SafeStreamYoutubePlayer> {
       if (_videoPlayerController!.value.isPlaying) {
         await _audioPlayer!.play();
       }
+      _videoPlayerController?.removeListener(_syncAudioWithVideo);
+      _videoPlayerController?.addListener(_syncAudioWithVideo);
     } catch (e) {
       debugPrint('Error loading audio track safely: $e');
     } finally {
