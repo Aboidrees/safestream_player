@@ -27,11 +27,16 @@ class _SafeStreamYoutubePlayerState extends State<SafeStreamYoutubePlayer> {
   VideoPlayerController? _videoPlayerController;
   ChewieController? _chewieController;
   AudioPlayer? _audioPlayer;
-  
+
+  List<VideoStreamInfo> _qualityTracks = [];
+  VideoStreamInfo? _selectedQualityTrack;
+
   List<AudioOnlyStreamInfo> _audioTracks = [];
   AudioOnlyStreamInfo? _selectedAudioTrack;
-  
+
   bool _isLoading = true;
+  bool _isSwitchingQuality = false;
+  bool _isChangingAudio = false;
   String? _errorMessage;
 
   @override
@@ -40,164 +45,310 @@ class _SafeStreamYoutubePlayerState extends State<SafeStreamYoutubePlayer> {
     _initPlayer();
   }
 
-  Future<void> _initPlayer() async {
+  Future<void> _initPlayer({Duration? resumePosition}) async {
     try {
       // 1. Get stream manifest
       final manifest = await _yt.videos.streamsClient.getManifest(widget.videoId);
       if (!mounted) return;
-      
-      // 2. We want a muxed stream (video + audio combined, usually max 720p).
-      // This is the safest bet for mobile/TV without complex audio syncing.
-      final streamInfo = manifest.muxed.bestQuality;
-      
-      // Store audio tracks for language selection
+
+      // Extract muxed video streams for quality selection
+      final muxedStreams = manifest.muxed.toList();
+      muxedStreams.sort((a, b) => b.videoQuality.index.compareTo(a.videoQuality.index));
+      _qualityTracks = muxedStreams;
+
+      // Select default stream (best quality muxed or explicitly selected)
+      final VideoStreamInfo streamInfo = _selectedQualityTrack ??
+          (muxedStreams.isNotEmpty ? muxedStreams.first : manifest.muxed.bestQuality);
+      _selectedQualityTrack = streamInfo;
+
+      // Extract audio tracks
       _audioTracks = manifest.audioOnly.toList();
 
-      // 3. Initialize VideoPlayer with the raw URL
-      _videoPlayerController = VideoPlayerController.networkUrl(streamInfo.url);
-      
-      await _videoPlayerController!.initialize();
+      // 2. Initialize VideoPlayerController
+      final newVideoController = VideoPlayerController.networkUrl(streamInfo.url);
+      await newVideoController.initialize();
       if (!mounted) {
-        _videoPlayerController?.dispose();
+        newVideoController.dispose();
         return;
       }
 
-      if (widget.startAt != null) {
-        await _videoPlayerController!.seekTo(widget.startAt!);
-        if (!mounted) return;
+      // Preserve or seek to initial position
+      final targetSeek = resumePosition ?? widget.startAt;
+      if (targetSeek != null) {
+        await newVideoController.seekTo(targetSeek);
       }
+
+      // Dispose previous controller if re-initializing quality
+      _videoPlayerController?.removeListener(_syncAudioWithVideo);
+      _videoPlayerController?.dispose();
+      _videoPlayerController = newVideoController;
 
       if (widget.onControllerCreated != null) {
         widget.onControllerCreated!(_videoPlayerController!);
       }
-      
-      // Initialize AudioPlayer
-      _audioPlayer = AudioPlayer();
 
-      // Keep them in sync
+      // Initialize or reset AudioPlayer
+      _audioPlayer ??= AudioPlayer();
       _videoPlayerController!.addListener(_syncAudioWithVideo);
 
-      // 4. Wrap with Chewie for the UI overlay
+      // 3. Setup ChewieController with Quality and Language options
+      _chewieController?.dispose();
       _chewieController = ChewieController(
         videoPlayerController: _videoPlayerController!,
-        autoPlay: widget.autoPlay,
+        autoPlay: widget.autoPlay || resumePosition != null,
         looping: false,
         allowFullScreen: true,
         allowMuting: true,
-        allowPlaybackSpeedChanging: true, // Restored default
+        allowPlaybackSpeedChanging: true,
+        materialProgressColors: ChewieProgressColors(
+          playedColor: const Color(0xFFEF4E50),
+          handleColor: const Color(0xFFEF4E50),
+          backgroundColor: Colors.white24,
+          bufferedColor: Colors.white60,
+        ),
         additionalOptions: (context) {
-          if (_audioTracks.isEmpty) return [];
-          
-          return [
-            OptionItem(
-              onTap: (context) {
-                // Pop the Chewie options bottom sheet
-                Navigator.pop(context);
-                // Show our language selection bottom sheet
-                showModalBottomSheet(
-                  context: context,
-                  builder: (context) {
-                    return SafeArea(
-                      child: Column(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          const Padding(
-                            padding: EdgeInsets.all(16.0),
-                            child: Text('Language Options', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18)),
-                          ),
-                          Expanded(
-                            child: ListView(
-                              shrinkWrap: true,
-                              children: _audioTracks.map((track) {
-                                final isSelected = _selectedAudioTrack == track;
-                                final name = track.audioTrack?.displayName ?? 'Audio Track (Bitrate: ${(track.bitrate.kiloBitsPerSecond).toStringAsFixed(0)} kbps)';
-                                return ListTile(
-                                  leading: isSelected ? const Icon(Icons.check) : const SizedBox(width: 24),
-                                  title: Text(name),
-                                  onTap: () {
-                                    Navigator.of(context).pop();
-                                    _onAudioTrackSelected(track);
-                                  },
-                                );
-                              }).toList(),
-                            ),
-                          ),
-                        ],
-                      ),
-                    );
-                  },
-                );
-              },
-              iconData: Icons.language,
-              title: 'Language',
-              subtitle: _selectedAudioTrack?.audioTrack?.displayName ?? 'Default',
-            ),
-          ];
+          final options = <OptionItem>[];
+
+          // ── 1. Quality Selection ──────────────────────────────────────────
+          if (_qualityTracks.isNotEmpty) {
+            options.add(
+              OptionItem(
+                onTap: (context) {
+                  Navigator.pop(context);
+                  _showQualityPicker(context);
+                },
+                iconData: Icons.settings,
+                title: 'Quality',
+                subtitle: _selectedQualityTrack?.qualityLabel ?? 'Auto',
+              ),
+            );
+          }
+
+          // ── 2. Language Selection ─────────────────────────────────────────
+          if (_audioTracks.isNotEmpty) {
+            options.add(
+              OptionItem(
+                onTap: (context) {
+                  Navigator.pop(context);
+                  _showLanguagePicker(context);
+                },
+                iconData: Icons.language,
+                title: 'Language',
+                subtitle: _selectedAudioTrack?.audioTrack?.displayName ?? 'Default',
+              ),
+            );
+          }
+
+          return options;
         },
       );
 
-      setState(() {
-        _isLoading = false;
-      });
+      if (mounted) {
+        setState(() {
+          _isLoading = false;
+          _isSwitchingQuality = false;
+        });
+      }
     } catch (e) {
       debugPrint('Error initializing SafeStreamYoutubePlayer: $e');
       if (mounted) {
         setState(() {
           _isLoading = false;
-          _errorMessage = 'Failed to load video: $e';
+          _isSwitchingQuality = false;
+          _errorMessage = 'Failed to load video. Please check connection.';
         });
       }
     }
   }
 
   void _syncAudioWithVideo() {
-    if (_audioPlayer == null || _videoPlayerController == null || _selectedAudioTrack == null) return;
-    
-    final videoIsPlaying = _videoPlayerController!.value.isPlaying;
+    if (_isChangingAudio ||
+        _isSwitchingQuality ||
+        _audioPlayer == null ||
+        _videoPlayerController == null ||
+        _selectedAudioTrack == null) {
+      return;
+    }
+
+    final videoVal = _videoPlayerController!.value;
+    if (!videoVal.isInitialized || videoVal.isBuffering) return;
+
+    final videoIsPlaying = videoVal.isPlaying;
     final audioIsPlaying = _audioPlayer!.playing;
-    
-    // Sync play state
+
+    // Sync play state without throwing
     if (videoIsPlaying && !audioIsPlaying) {
       _audioPlayer!.play().catchError((e) => debugPrint('Audio play error: $e'));
     } else if (!videoIsPlaying && audioIsPlaying) {
       _audioPlayer!.pause().catchError((e) => debugPrint('Audio pause error: $e'));
     }
-    
-    // Sync position if it drifts by more than 500ms
-    final videoPos = _videoPlayerController!.value.position;
+
+    // Sync position if it drifts by more than 1000ms
+    final videoPos = videoVal.position;
     final audioPos = _audioPlayer!.position;
-    
-    if ((videoPos - audioPos).inMilliseconds.abs() > 500) {
+
+    if ((videoPos - audioPos).inMilliseconds.abs() > 1000) {
       _audioPlayer!.seek(videoPos).catchError((e) => debugPrint('Audio seek error: $e'));
     }
   }
 
+  void _onQualityTrackSelected(VideoStreamInfo track) async {
+    if (_videoPlayerController == null || _selectedQualityTrack == track) return;
+
+    final currentPosition = _videoPlayerController!.value.position;
+    setState(() {
+      _selectedQualityTrack = track;
+      _isSwitchingQuality = true;
+    });
+
+    await _initPlayer(resumePosition: currentPosition);
+  }
+
   void _onAudioTrackSelected(AudioOnlyStreamInfo track) async {
     if (_audioPlayer == null || _videoPlayerController == null) return;
-    
+
     setState(() {
       _selectedAudioTrack = track;
+      _isChangingAudio = true;
     });
-    
-    // Mute the main video to hear the alternate audio track
+
+    // Mute video track so alternate audio is heard
     await _videoPlayerController!.setVolume(0);
-    
+
     try {
-      // Load the new audio URL
+      await _audioPlayer!.stop();
       await _audioPlayer!.setUrl(track.url.toString());
-      
-      // Sync position
-      final position = _videoPlayerController!.value.position;
-      await _audioPlayer!.seek(position);
-      
-      // Play or pause based on video state
+
+      final currentPos = _videoPlayerController!.value.position;
+      await _audioPlayer!.seek(currentPos);
+
       if (_videoPlayerController!.value.isPlaying) {
-        _audioPlayer!.play();
+        await _audioPlayer!.play();
       }
     } catch (e) {
-      // PlayerInterruptedException can occur if setUrl is interrupted by another load/seek.
-      debugPrint('Error loading audio track: $e');
+      debugPrint('Error loading audio track safely: $e');
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isChangingAudio = false;
+        });
+      }
     }
+  }
+
+  void _showQualityPicker(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: isDark ? const Color(0xFF1E1E1E) : Colors.white,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (ctx) {
+        return SafeArea(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Padding(
+                padding: const EdgeInsets.all(16.0),
+                child: Text(
+                  'Video Quality',
+                  style: TextStyle(
+                    fontWeight: FontWeight.bold,
+                    fontSize: 16,
+                    color: isDark ? Colors.white : Colors.black87,
+                  ),
+                ),
+              ),
+              const Divider(height: 1),
+              Flexible(
+                child: ListView(
+                  shrinkWrap: true,
+                  children: _qualityTracks.map((track) {
+                    final isSelected = _selectedQualityTrack == track;
+                    final label = track.qualityLabel;
+                    return ListTile(
+                      leading: isSelected
+                          ? const Icon(Icons.check_circle_rounded, color: Color(0xFFEF4E50))
+                          : const SizedBox(width: 24),
+                      title: Text(
+                        label,
+                        style: TextStyle(
+                          color: isDark ? Colors.white : Colors.black87,
+                          fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
+                        ),
+                      ),
+                      onTap: () {
+                        Navigator.of(ctx).pop();
+                        _onQualityTrackSelected(track);
+                      },
+                    );
+                  }).toList(),
+                ),
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
+  void _showLanguagePicker(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: isDark ? const Color(0xFF1E1E1E) : Colors.white,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (ctx) {
+        return SafeArea(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Padding(
+                padding: const EdgeInsets.all(16.0),
+                child: Text(
+                  'Audio Language / Track',
+                  style: TextStyle(
+                    fontWeight: FontWeight.bold,
+                    fontSize: 16,
+                    color: isDark ? Colors.white : Colors.black87,
+                  ),
+                ),
+              ),
+              const Divider(height: 1),
+              Flexible(
+                child: ListView(
+                  shrinkWrap: true,
+                  children: _audioTracks.map((track) {
+                    final isSelected = _selectedAudioTrack == track;
+                    final name = track.audioTrack?.displayName ??
+                        'Audio Track (${(track.bitrate.kiloBitsPerSecond).toStringAsFixed(0)} kbps)';
+                    return ListTile(
+                      leading: isSelected
+                          ? const Icon(Icons.check_circle_rounded, color: Color(0xFFEF4E50))
+                          : const SizedBox(width: 24),
+                      title: Text(
+                        name,
+                        style: TextStyle(
+                          color: isDark ? Colors.white : Colors.black87,
+                          fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
+                        ),
+                      ),
+                      onTap: () {
+                        Navigator.of(ctx).pop();
+                        _onAudioTrackSelected(track);
+                      },
+                    );
+                  }).toList(),
+                ),
+              ),
+            ],
+          ),
+        );
+      },
+    );
   }
 
   @override
@@ -208,7 +359,9 @@ class _SafeStreamYoutubePlayerState extends State<SafeStreamYoutubePlayer> {
       setState(() {
         _isLoading = true;
         _errorMessage = null;
+        _selectedQualityTrack = null;
         _selectedAudioTrack = null;
+        _qualityTracks = [];
         _audioTracks = [];
       });
       _initPlayer();
@@ -216,6 +369,7 @@ class _SafeStreamYoutubePlayerState extends State<SafeStreamYoutubePlayer> {
   }
 
   void _disposeControllers() {
+    _videoPlayerController?.removeListener(_syncAudioWithVideo);
     _chewieController?.dispose();
     _chewieController = null;
     _videoPlayerController?.dispose();
@@ -233,13 +387,13 @@ class _SafeStreamYoutubePlayerState extends State<SafeStreamYoutubePlayer> {
 
   @override
   Widget build(BuildContext context) {
-    if (_isLoading) {
+    if (_isLoading || _isSwitchingQuality) {
       return AspectRatio(
         aspectRatio: 16 / 9,
         child: Container(
           color: Colors.black,
           child: const Center(
-            child: CircularProgressIndicator(color: Colors.red),
+            child: CircularProgressIndicator(color: Color(0xFFEF4E50)),
           ),
         ),
       );
@@ -255,7 +409,7 @@ class _SafeStreamYoutubePlayerState extends State<SafeStreamYoutubePlayer> {
               padding: const EdgeInsets.all(16.0),
               child: Text(
                 _errorMessage!,
-                style: const TextStyle(color: Colors.red),
+                style: const TextStyle(color: Color(0xFFEF4E50)),
                 textAlign: TextAlign.center,
               ),
             ),
@@ -265,9 +419,8 @@ class _SafeStreamYoutubePlayerState extends State<SafeStreamYoutubePlayer> {
     }
 
     if (_chewieController != null) {
-      // The aspect ratio can be enforced here, or we can use the video's actual aspect ratio
       return AspectRatio(
-        aspectRatio: _videoPlayerController!.value.aspectRatio,
+        aspectRatio: _videoPlayerController?.value.aspectRatio ?? 16 / 9,
         child: Chewie(controller: _chewieController!),
       );
     }
