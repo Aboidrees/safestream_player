@@ -4,11 +4,76 @@ import 'package:video_player/video_player.dart';
 import 'package:chewie/chewie.dart';
 import 'package:just_audio/just_audio.dart';
 
+import 'safestream_player_controller.dart';
+
+/// Wraps a raw [VideoPlayerController] so it satisfies the backend-agnostic
+/// [SafeStreamPlayerController] contract consumed by the host app.
+class _VideoPlayerControllerAdapter extends SafeStreamPlayerController {
+  final VideoPlayerController _controller;
+
+  _VideoPlayerControllerAdapter(this._controller) {
+    _controller.addListener(_sync);
+    _sync();
+  }
+
+  void _sync() {
+    value = SafeStreamPlayerValue(
+      duration: _controller.value.duration,
+      position: _controller.value.position,
+      isPlaying: _controller.value.isPlaying,
+    );
+  }
+
+  @override
+  void play() => _controller.play();
+
+  @override
+  void pause() => _controller.pause();
+
+  @override
+  Future<void> disposePlayer() async {
+    _controller.removeListener(_sync);
+  }
+}
+
+/// In-memory cache of resolved stream manifests, keyed by video ID.
+///
+/// Manifest resolution (`getManifest`) is the expensive, YouTube-rate-limited
+/// call — it was previously re-issued on every quality switch and every
+/// re-init of the same video within a session. Stream URLs stay valid for
+/// hours, so within-session reuse is safe and removes that redundant traffic
+/// entirely. This is process-local (cleared on app restart); it does not
+/// reduce cross-device duplicate traffic — that requires a server-side cache.
+class _ManifestCache {
+  static final Map<String, _CachedManifest> _cache = {};
+  static const Duration _ttl = Duration(hours: 4);
+
+  static StreamManifest? get(String videoId) {
+    final entry = _cache[videoId];
+    if (entry == null) return null;
+    if (DateTime.now().difference(entry.fetchedAt) > _ttl) {
+      _cache.remove(videoId);
+      return null;
+    }
+    return entry.manifest;
+  }
+
+  static void put(String videoId, StreamManifest manifest) {
+    _cache[videoId] = _CachedManifest(manifest, DateTime.now());
+  }
+}
+
+class _CachedManifest {
+  final StreamManifest manifest;
+  final DateTime fetchedAt;
+  _CachedManifest(this.manifest, this.fetchedAt);
+}
+
 class SafeStreamYoutubePlayer extends StatefulWidget {
   final String videoId;
   final bool autoPlay;
   final Duration? startAt;
-  final void Function(VideoPlayerController)? onControllerCreated;
+  final void Function(SafeStreamPlayerController)? onControllerCreated;
 
   const SafeStreamYoutubePlayer({
     Key? key,
@@ -27,6 +92,7 @@ class _SafeStreamYoutubePlayerState extends State<SafeStreamYoutubePlayer> {
   VideoPlayerController? _videoPlayerController;
   ChewieController? _chewieController;
   AudioPlayer? _audioPlayer;
+  _VideoPlayerControllerAdapter? _controllerAdapter;
 
   List<VideoStreamInfo> _qualityTracks = [];
   VideoStreamInfo? _selectedQualityTrack;
@@ -47,8 +113,17 @@ class _SafeStreamYoutubePlayerState extends State<SafeStreamYoutubePlayer> {
 
   Future<void> _initPlayer({Duration? resumePosition}) async {
     try {
-      // 1. Get stream manifest
-      final manifest = await _yt.videos.streamsClient.getManifest(widget.videoId);
+      // 1. Get stream manifest (reuse within-session cache when available —
+      // avoids re-hitting YouTube on every quality switch / re-init of the
+      // same video, see _ManifestCache).
+      final cached = _ManifestCache.get(widget.videoId);
+      final StreamManifest manifest;
+      if (cached != null) {
+        manifest = cached;
+      } else {
+        manifest = await _yt.videos.streamsClient.getManifest(widget.videoId);
+        _ManifestCache.put(widget.videoId, manifest);
+      }
       if (!mounted) return;
 
       // Extract muxed video streams for quality selection
@@ -95,8 +170,11 @@ class _SafeStreamYoutubePlayerState extends State<SafeStreamYoutubePlayer> {
       _videoPlayerController?.dispose();
       _videoPlayerController = newVideoController;
 
+      await _controllerAdapter?.disposePlayer();
+      _controllerAdapter = _VideoPlayerControllerAdapter(_videoPlayerController!);
+
       if (widget.onControllerCreated != null) {
-        widget.onControllerCreated!(_videoPlayerController!);
+        widget.onControllerCreated!(_controllerAdapter!);
       }
 
       // Only attach audio sync listener if an alternate audio track is selected
@@ -390,6 +468,8 @@ class _SafeStreamYoutubePlayerState extends State<SafeStreamYoutubePlayer> {
     _chewieController = null;
     _videoPlayerController?.dispose();
     _videoPlayerController = null;
+    _controllerAdapter?.disposePlayer();
+    _controllerAdapter = null;
     _audioPlayer?.dispose().catchError((e) => debugPrint('Audio dispose error: $e'));
     _audioPlayer = null;
   }
