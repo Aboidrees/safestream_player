@@ -41,6 +41,15 @@ class _IframeControllerAdapter extends SafeStreamPlayerController {
   void pause() => _controller.pauseVideo();
 
   @override
+  void seekTo(Duration position) {
+    _controller.seekTo(seconds: position.inMilliseconds / 1000.0, allowSeekAhead: true);
+    // The iframe only streams position updates while playing — reflect the
+    // seek immediately so a scrub while paused doesn't leave the overlay's
+    // progress bar showing the stale position.
+    value = value.copyWith(position: position);
+  }
+
+  @override
   Future<void> disposePlayer() async {
     _durationPoll?.cancel();
     await _positionSub?.cancel();
@@ -61,6 +70,13 @@ class SafeStreamIframePlayer extends StatefulWidget {
   final String videoId;
   final bool autoPlay;
   final Duration? startAt;
+
+  /// Whether to show YouTube's own player chrome. Off by default: the app
+  /// draws its own kid-friendly overlay controls (which also keeps YouTube's
+  /// fullscreen button — and the fullscreen restart loop it triggers — out
+  /// of reach of small fingers).
+  final bool showNativeControls;
+
   final void Function(SafeStreamPlayerController)? onControllerCreated;
 
   const SafeStreamIframePlayer({
@@ -68,6 +84,7 @@ class SafeStreamIframePlayer extends StatefulWidget {
     required this.videoId,
     this.autoPlay = true,
     this.startAt,
+    this.showNativeControls = false,
     this.onControllerCreated,
   }) : super(key: key);
 
@@ -86,9 +103,13 @@ class _SafeStreamIframePlayerState extends State<SafeStreamIframePlayer> {
       videoId: widget.videoId,
       autoPlay: widget.autoPlay,
       startSeconds: widget.startAt?.inSeconds.toDouble() ?? 0,
-      params: const YoutubePlayerParams(
-        showControls: true,
-        showFullscreenButton: true,
+      params: YoutubePlayerParams(
+        showControls: widget.showNativeControls,
+        // Never expose YouTube's fullscreen button: entering the package's
+        // fullscreen mode re-parents the WebView (reloading the video from
+        // zero) and flips its internal PopScope to swallow the back button —
+        // the exact restart-on-back loop reported on TV/tablet/mobile.
+        showFullscreenButton: false,
         strictRelatedVideos: true,
         privacyEnhancedMode: true,
         enableJavaScript: true,
@@ -117,7 +138,21 @@ class _SafeStreamIframePlayerState extends State<SafeStreamIframePlayer> {
   Widget build(BuildContext context) {
     return AspectRatio(
       aspectRatio: 16 / 9,
-      child: YoutubePlayer(controller: _controller, aspectRatio: 16 / 9),
+      child: YoutubePlayer(
+        controller: _controller,
+        aspectRatio: 16 / 9,
+        // ROOT CAUSE of the restart-on-back bug: this defaults to true, and
+        // on any landscape screen (Android TV is *always* landscape) the
+        // package force-enters its fullscreen mode. That (a) re-parents the
+        // WebView, reloading the video from 0:00, and (b) flips the
+        // package's internal PopScope to canPop:false, so back only exits
+        // fullscreen — which the next frame's didChangeMetrics immediately
+        // re-enters. Result: back never closes the player and every press
+        // restarts the video. The player already fills our screen edge to
+        // edge; the package's fullscreen mode adds nothing but the loop.
+        autoFullScreen: false,
+        enableFullScreenOnVerticalDrag: false,
+      ),
     );
   }
 }

@@ -31,6 +31,9 @@ class _VideoPlayerControllerAdapter extends SafeStreamPlayerController {
   void pause() => _controller.pause();
 
   @override
+  void seekTo(Duration position) => _controller.seekTo(position);
+
+  @override
   Future<void> disposePlayer() async {
     _controller.removeListener(_sync);
   }

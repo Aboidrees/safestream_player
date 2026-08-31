@@ -38,6 +38,10 @@ abstract class SafeStreamPlayerController extends ValueNotifier<SafeStreamPlayer
   void play();
   void pause();
 
+  /// Jumps playback to [position]. Used by the custom control overlay
+  /// (rewind/forward buttons, scrubber) and by resume-playback.
+  void seekTo(Duration position);
+
   /// Releases the underlying player resources. Named distinctly from
   /// [dispose] (owned by [ChangeNotifier]) so backends can clean up their
   /// native player before the notifier itself is torn down.
