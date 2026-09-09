@@ -8,22 +8,26 @@ class SafeStreamPlayerValue {
   final Duration duration;
   final Duration position;
   final bool isPlaying;
+  final bool isEnded;
 
   const SafeStreamPlayerValue({
     this.duration = Duration.zero,
     this.position = Duration.zero,
     this.isPlaying = false,
+    this.isEnded = false,
   });
 
   SafeStreamPlayerValue copyWith({
     Duration? duration,
     Duration? position,
     bool? isPlaying,
+    bool? isEnded,
   }) {
     return SafeStreamPlayerValue(
       duration: duration ?? this.duration,
       position: position ?? this.position,
       isPlaying: isPlaying ?? this.isPlaying,
+      isEnded: isEnded ?? this.isEnded,
     );
   }
 }

@@ -17,10 +17,14 @@ class _VideoPlayerControllerAdapter extends SafeStreamPlayerController {
   }
 
   void _sync() {
+    final dur = _controller.value.duration;
+    final pos = _controller.value.position;
+    final isEnded = dur.inSeconds > 0 && pos >= dur;
     value = SafeStreamPlayerValue(
-      duration: _controller.value.duration,
-      position: _controller.value.position,
+      duration: dur,
+      position: pos,
       isPlaying: _controller.value.isPlaying,
+      isEnded: isEnded,
     );
   }
 

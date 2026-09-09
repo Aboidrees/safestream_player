@@ -24,7 +24,9 @@ class _IframeControllerAdapter extends SafeStreamPlayerController {
       value = value.copyWith(position: state.position);
     });
     _stateSub = _controller.stream.listen((playerValue) {
-      value = value.copyWith(isPlaying: playerValue.playerState == PlayerState.playing);
+      final isPlaying = playerValue.playerState == PlayerState.playing;
+      final isEnded = playerValue.playerState == PlayerState.ended;
+      value = value.copyWith(isPlaying: isPlaying, isEnded: isEnded);
     });
     _durationPoll = Timer.periodic(const Duration(seconds: 3), (_) async {
       final seconds = await _controller.duration;
