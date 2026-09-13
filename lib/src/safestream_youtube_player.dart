@@ -200,7 +200,7 @@ class _SafeStreamYoutubePlayerState extends State<SafeStreamYoutubePlayer> {
             orElse: () => null,
           );
           if (track != null) {
-            _changeAudioTrack(track);
+            _onAudioTrackSelected(track);
           }
         },
       );
