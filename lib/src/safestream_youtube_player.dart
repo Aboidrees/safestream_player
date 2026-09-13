@@ -10,8 +10,9 @@ import 'safestream_player_controller.dart';
 /// [SafeStreamPlayerController] contract consumed by the host app.
 class _VideoPlayerControllerAdapter extends SafeStreamPlayerController {
   final VideoPlayerController _controller;
+  final void Function(String)? onLanguageChange;
 
-  _VideoPlayerControllerAdapter(this._controller) {
+  _VideoPlayerControllerAdapter(this._controller, {this.onLanguageChange}) {
     _controller.addListener(_sync);
     _sync();
   }
@@ -20,11 +21,12 @@ class _VideoPlayerControllerAdapter extends SafeStreamPlayerController {
     final dur = _controller.value.duration;
     final pos = _controller.value.position;
     final isEnded = dur.inSeconds > 0 && pos >= dur;
-    value = SafeStreamPlayerValue(
+    value = value.copyWith(
       duration: dur,
       position: pos,
       isPlaying: _controller.value.isPlaying,
       isEnded: isEnded,
+      playbackSpeed: _controller.value.playbackSpeed,
     );
   }
 
@@ -36,6 +38,18 @@ class _VideoPlayerControllerAdapter extends SafeStreamPlayerController {
 
   @override
   void seekTo(Duration position) => _controller.seekTo(position);
+
+  @override
+  void setPlaybackSpeed(double speed) {
+    _controller.setPlaybackSpeed(speed);
+    value = value.copyWith(playbackSpeed: speed);
+  }
+
+  @override
+  void setLanguage(String languageCode) {
+    onLanguageChange?.call(languageCode);
+    value = value.copyWith(currentLanguage: languageCode);
+  }
 
   @override
   Future<void> disposePlayer() async {
@@ -178,7 +192,26 @@ class _SafeStreamYoutubePlayerState extends State<SafeStreamYoutubePlayer> {
       _videoPlayerController = newVideoController;
 
       await _controllerAdapter?.disposePlayer();
-      _controllerAdapter = _VideoPlayerControllerAdapter(_videoPlayerController!);
+      _controllerAdapter = _VideoPlayerControllerAdapter(
+        _videoPlayerController!,
+        onLanguageChange: (lang) {
+          final track = _audioTracks.cast<AudioOnlyStreamInfo?>().firstWhere(
+            (t) => (t?.audioTrack?.displayName ?? '').toLowerCase().contains(lang.toLowerCase()),
+            orElse: () => null,
+          );
+          if (track != null) {
+            _changeAudioTrack(track);
+          }
+        },
+      );
+      final availableLanguages = _audioTracks
+          .map((t) => t.audioTrack?.displayName ?? '')
+          .where((l) => l.isNotEmpty)
+          .toList();
+      _controllerAdapter!.value = _controllerAdapter!.value.copyWith(
+        availableLanguages: availableLanguages,
+        currentLanguage: _selectedAudioTrack?.audioTrack?.displayName,
+      );
 
       if (widget.onControllerCreated != null) {
         widget.onControllerCreated!(_controllerAdapter!);
@@ -190,15 +223,16 @@ class _SafeStreamYoutubePlayerState extends State<SafeStreamYoutubePlayer> {
         _videoPlayerController!.addListener(_syncAudioWithVideo);
       }
 
-      // 3. Setup ChewieController with Quality and Language options
+      // 3. Setup ChewieController (native controls disabled in favor of custom overlay)
       _chewieController?.dispose();
       _chewieController = ChewieController(
         videoPlayerController: _videoPlayerController!,
         autoPlay: widget.autoPlay || resumePosition != null,
         looping: false,
-        allowFullScreen: true,
+        showControls: false,
+        allowFullScreen: false,
         allowMuting: true,
-        allowPlaybackSpeedChanging: true,
+        allowPlaybackSpeedChanging: false,
         materialProgressColors: ChewieProgressColors(
           playedColor: const Color(0xFFEF4E50),
           handleColor: const Color(0xFFEF4E50),
