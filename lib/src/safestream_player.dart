@@ -26,6 +26,13 @@ class SafeStreamPlayer extends StatelessWidget {
   final Duration? startAt;
   final void Function(SafeStreamPlayerController)? onControllerCreated;
 
+  /// Custom controls drawn on top of the video. Must be passed here rather
+  /// than stacked over the player by the caller: on mobile the iframe
+  /// backend renders its WebView in an OverlayPortal above the whole route,
+  /// so anything the caller stacks on top is painted underneath the video
+  /// and never receives touches.
+  final Widget? controls;
+
   const SafeStreamPlayer({
     Key? key,
     required this.videoId,
@@ -33,6 +40,7 @@ class SafeStreamPlayer extends StatelessWidget {
     this.autoPlay = true,
     this.startAt,
     this.onControllerCreated,
+    this.controls,
   }) : super(key: key);
 
   @override
@@ -43,6 +51,7 @@ class SafeStreamPlayer extends StatelessWidget {
         autoPlay: autoPlay,
         startAt: startAt,
         onControllerCreated: onControllerCreated,
+        controls: controls,
       );
     }
     return SafeStreamIframePlayer(
@@ -50,6 +59,7 @@ class SafeStreamPlayer extends StatelessWidget {
       autoPlay: autoPlay,
       startAt: startAt,
       onControllerCreated: onControllerCreated,
+      controls: controls,
     );
   }
 }

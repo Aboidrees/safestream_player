@@ -46,9 +46,10 @@ class _VideoPlayerControllerAdapter extends SafeStreamPlayerController {
   }
 
   @override
-  void setLanguage(String languageCode) {
-    onLanguageChange?.call(languageCode);
-    value = value.copyWith(currentLanguage: languageCode);
+  void setLanguage(String language) {
+    if (!value.availableLanguages.contains(language)) return;
+    onLanguageChange?.call(language);
+    value = value.copyWith(currentLanguage: language);
   }
 
   @override
@@ -96,12 +97,16 @@ class SafeStreamYoutubePlayer extends StatefulWidget {
   final Duration? startAt;
   final void Function(SafeStreamPlayerController)? onControllerCreated;
 
+  /// Custom controls drawn on top of the video.
+  final Widget? controls;
+
   const SafeStreamYoutubePlayer({
     Key? key,
     required this.videoId,
     this.autoPlay = true,
     this.startAt,
     this.onControllerCreated,
+    this.controls,
   }) : super(key: key);
 
   @override
@@ -195,18 +200,24 @@ class _SafeStreamYoutubePlayerState extends State<SafeStreamYoutubePlayer> {
       _controllerAdapter = _VideoPlayerControllerAdapter(
         _videoPlayerController!,
         onLanguageChange: (lang) {
-          final track = _audioTracks.cast<AudioOnlyStreamInfo?>().firstWhere(
-            (t) => (t?.audioTrack?.displayName ?? '').toLowerCase().contains(lang.toLowerCase()),
-            orElse: () => null,
-          );
-          if (track != null) {
-            _onAudioTrackSelected(track);
+          // Exact match on the track's display name (the values exposed in
+          // availableLanguages). Substring matching picked the wrong track:
+          // 'en' matched "French", 'ar' matched "Bulgarian". YouTube lists
+          // each language at several bitrates — take the best one.
+          final candidates = _audioTracks
+              .where((t) => t.audioTrack?.displayName == lang)
+              .toList()
+            ..sort((a, b) => b.bitrate.compareTo(a.bitrate));
+          if (candidates.isNotEmpty) {
+            _onAudioTrackSelected(candidates.first);
           }
         },
       );
+      // One entry per language (manifests repeat a language per bitrate).
       final availableLanguages = _audioTracks
           .map((t) => t.audioTrack?.displayName ?? '')
           .where((l) => l.isNotEmpty)
+          .toSet()
           .toList();
       _controllerAdapter!.value = _controllerAdapter!.value.copyWith(
         availableLanguages: availableLanguages,
@@ -338,7 +349,10 @@ class _SafeStreamYoutubePlayerState extends State<SafeStreamYoutubePlayer> {
   }
 
   void _onAudioTrackSelected(AudioOnlyStreamInfo track) async {
-    if (_audioPlayer == null || _videoPlayerController == null) return;
+    if (_videoPlayerController == null) return;
+    // Created lazily on the first switch — previously this bailed out when
+    // no alternate track had been selected yet, so switching never started.
+    _audioPlayer ??= AudioPlayer();
 
     setState(() {
       _selectedAudioTrack = track;
@@ -558,7 +572,15 @@ class _SafeStreamYoutubePlayerState extends State<SafeStreamYoutubePlayer> {
     if (_chewieController != null) {
       return AspectRatio(
         aspectRatio: _videoPlayerController?.value.aspectRatio ?? 16 / 9,
-        child: Chewie(controller: _chewieController!),
+        child: widget.controls == null
+            ? Chewie(controller: _chewieController!)
+            : Stack(
+                fit: StackFit.expand,
+                children: [
+                  Chewie(controller: _chewieController!),
+                  widget.controls!,
+                ],
+              ),
       );
     }
 

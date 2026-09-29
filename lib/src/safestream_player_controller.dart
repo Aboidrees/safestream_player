@@ -10,7 +10,11 @@ class SafeStreamPlayerValue {
   final bool isPlaying;
   final bool isEnded;
   final double playbackSpeed;
+  /// Display name of the selected audio track, or null for the default.
   final String? currentLanguage;
+
+  /// Display names of the switchable audio tracks; empty when the backend
+  /// can't switch audio (callers should hide language UI).
   final List<String> availableLanguages;
 
   const SafeStreamPlayerValue({
@@ -61,8 +65,10 @@ abstract class SafeStreamPlayerController extends ValueNotifier<SafeStreamPlayer
   /// Changes the playback rate/speed (e.g. 0.5, 0.75, 1.0, 1.25, 1.5, 2.0).
   void setPlaybackSpeed(double speed);
 
-  /// Selects audio track or caption language (e.g. 'en', 'ar').
-  void setLanguage(String languageCode);
+  /// Switches the audio track. [language] must be one of
+  /// [SafeStreamPlayerValue.availableLanguages]; backends that can't switch
+  /// audio expose an empty list and ignore the call.
+  void setLanguage(String language);
 
   /// Releases the underlying player resources. Named distinctly from
   /// [dispose] (owned by [ChangeNotifier]) so backends can clean up their
