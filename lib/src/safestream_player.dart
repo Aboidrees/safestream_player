@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'safestream_iframe_player.dart';
 import 'safestream_player_controller.dart';
 import 'safestream_youtube_player.dart';
+import 'unofficial_youtube_gate.dart';
 
 /// Picks the right playback backend per video:
 ///
@@ -15,10 +16,16 @@ import 'safestream_youtube_player.dart';
 ///   videos that actually need it — every device playing this backend
 ///   re-issues (session-cached) calls against YouTube's unofficial internal
 ///   API, which is the traffic pattern that got the app rate-limited.
-/// - [preferredAudioLanguage]: probe the video once (cached) and use the
-///   custom player — starting in that language — only when the video has an
-///   alternate audio track in it. Otherwise, or if the probe fails, the
-///   official player is used.
+/// - [preferredAudioLanguage]: use the custom player — starting in that
+///   language — only when the video has an alternate audio track in it.
+///   Availability comes from [knownAudioLanguages] (shared by the backend,
+///   no YouTube request) or, failing that, one cached probe whose result is
+///   handed to [onAudioLanguagesProbed] for sharing. Otherwise the official
+///   player plays the original audio.
+///
+/// Every unofficial request goes through [UnofficialYoutubeGate]: while it is
+/// closed (kill switch, or cooling down after YouTube refused a request)
+/// everything plays in the official player.
 ///
 /// Both backends hand back a shared [SafeStreamPlayerController], so callers
 /// (screen-time monitoring, child lock, progress tracking) don't need to
@@ -41,6 +48,14 @@ class SafeStreamPlayer extends StatefulWidget {
   /// play every video in its original audio.
   final String? preferredAudioLanguage;
 
+  /// The video's alternate audio languages when already known (e.g. shared
+  /// by the backend after another device probed it); null when unknown.
+  final Set<String>? knownAudioLanguages;
+
+  /// Receives the result of a probe this player had to make, so the caller
+  /// can share it and spare other devices the request.
+  final ValueChanged<Set<String>>? onAudioLanguagesProbed;
+
   const SafeStreamPlayer({
     Key? key,
     required this.videoId,
@@ -50,6 +65,8 @@ class SafeStreamPlayer extends StatefulWidget {
     this.onControllerCreated,
     this.controls,
     this.preferredAudioLanguage,
+    this.knownAudioLanguages,
+    this.onAudioLanguagesProbed,
   }) : super(key: key);
 
   @override
@@ -83,6 +100,10 @@ class _SafeStreamPlayerState extends State<SafeStreamPlayer> {
 
   void _decide() {
     final language = widget.preferredAudioLanguage;
+    if (!UnofficialYoutubeGate.isOpen) {
+      _useCustomPlayer = false;
+      return;
+    }
     if (widget.requiresMultiLanguageAudio) {
       _useCustomPlayer = true;
       return;
@@ -91,15 +112,19 @@ class _SafeStreamPlayerState extends State<SafeStreamPlayer> {
       _useCustomPlayer = false;
       return;
     }
-    final known = SafeStreamAudioProbe.cached(widget.videoId, language);
+    final known = widget.knownAudioLanguages ?? SafeStreamAudioProbe.cached(widget.videoId);
     if (known != null) {
-      _useCustomPlayer = known;
+      _useCustomPlayer = known.contains(language);
       return;
     }
 
     _useCustomPlayer = null;
     final videoId = widget.videoId;
-    SafeStreamAudioProbe.hasAlternateAudio(videoId, language)
+    final probe = SafeStreamAudioProbe.alternateLanguages(videoId);
+    // Share the answer whenever it arrives, even after a timeout below.
+    probe.then((languages) => widget.onAudioLanguagesProbed?.call(languages)).ignore();
+    probe
+        .then((languages) => languages.contains(language))
         .timeout(_probeTimeout)
         .catchError((Object e) {
           // Blocked / rate-limited / offline: play normally rather than fail.
@@ -110,6 +135,14 @@ class _SafeStreamPlayerState extends State<SafeStreamPlayer> {
           if (!mounted || widget.videoId != videoId) return;
           setState(() => _useCustomPlayer = hasLanguage);
         });
+  }
+
+  /// The custom player couldn't load (gate closed or YouTube refused):
+  /// fall back to the official player for this video.
+  void _fallBackToOfficialPlayer() {
+    if (mounted && _useCustomPlayer != false) {
+      setState(() => _useCustomPlayer = false);
+    }
   }
 
   @override
@@ -132,6 +165,7 @@ class _SafeStreamPlayerState extends State<SafeStreamPlayer> {
         onControllerCreated: widget.onControllerCreated,
         controls: widget.controls,
         preferredAudioLanguage: widget.preferredAudioLanguage,
+        onLoadFailed: _fallBackToOfficialPlayer,
       );
     }
     return SafeStreamIframePlayer(

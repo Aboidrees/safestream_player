@@ -5,6 +5,7 @@ import 'package:chewie/chewie.dart';
 import 'package:just_audio/just_audio.dart';
 
 import 'safestream_player_controller.dart';
+import 'unofficial_youtube_gate.dart';
 
 /// Wraps a raw [VideoPlayerController] so it satisfies the backend-agnostic
 /// [SafeStreamPlayerController] contract consumed by the host app.
@@ -103,22 +104,25 @@ AudioOnlyStreamInfo? _alternateTrackFor(Iterable<AudioOnlyStreamInfo> tracks, St
   return matches.isEmpty ? null : matches.first;
 }
 
-/// Answers "does this video have an alternate audio track in language X?"
-/// so [SafeStreamPlayer] can keep the official player unless the preferred
+/// Finds which alternate audio languages a video offers, so
+/// [SafeStreamPlayer] can keep the official player unless the preferred
 /// language is really available. Shares [_ManifestCache] with the custom
-/// player, so a positive answer costs no second fetch; answers are cached.
+/// player (a positive answer costs no second fetch) and caches answers.
+/// Goes through [UnofficialYoutubeGate]: refuses while it is closed and trips
+/// it on failure.
 class SafeStreamAudioProbe {
   SafeStreamAudioProbe._();
 
-  static final Map<String, bool> _answers = {};
+  static final Map<String, Set<String>> _answers = {};
 
-  /// Cached answer, or null when the video hasn't been probed yet.
-  static bool? cached(String videoId, String language) => _answers['$videoId|$language'];
+  /// Cached alternate languages, or null when the video hasn't been probed.
+  static Set<String>? cached(String videoId) => _answers[videoId];
 
-  static Future<bool> hasAlternateAudio(String videoId, String language) async {
-    final key = '$videoId|$language';
-    final known = _answers[key];
+  /// ISO 639-1 codes of the video's *alternate* (non-original) audio tracks.
+  static Future<Set<String>> alternateLanguages(String videoId) async {
+    final known = _answers[videoId];
     if (known != null) return known;
+    if (!UnofficialYoutubeGate.isOpen) throw const UnofficialYoutubeBlocked();
 
     var manifest = _ManifestCache.get(videoId);
     if (manifest == null) {
@@ -126,11 +130,19 @@ class SafeStreamAudioProbe {
       try {
         manifest = await yt.videos.streamsClient.getManifest(videoId);
         _ManifestCache.put(videoId, manifest);
+      } catch (e) {
+        UnofficialYoutubeGate.trip(e);
+        rethrow;
       } finally {
         yt.close();
       }
     }
-    return _answers[key] = _alternateTrackFor(manifest.audioOnly, language) != null;
+    final languages = manifest.audioOnly
+        .where((t) => t.audioTrack?.audioIsDefault != true)
+        .map(_trackLanguage)
+        .whereType<String>()
+        .toSet();
+    return _answers[videoId] = languages;
   }
 }
 
@@ -153,6 +165,11 @@ class SafeStreamYoutubePlayer extends StatefulWidget {
   /// alternate track in that language (e.g. set by a parent).
   final String? preferredAudioLanguage;
 
+  /// Called when the video can't be loaded through the unofficial API (the
+  /// gate is closed, or YouTube refused). The caller should fall back to the
+  /// official player; the gate has already been tripped.
+  final VoidCallback? onLoadFailed;
+
   const SafeStreamYoutubePlayer({
     Key? key,
     required this.videoId,
@@ -161,6 +178,7 @@ class SafeStreamYoutubePlayer extends StatefulWidget {
     this.onControllerCreated,
     this.controls,
     this.preferredAudioLanguage,
+    this.onLoadFailed,
   }) : super(key: key);
 
   @override
@@ -201,6 +219,7 @@ class _SafeStreamYoutubePlayerState extends State<SafeStreamYoutubePlayer> {
       if (cached != null) {
         manifest = cached;
       } else {
+        if (!UnofficialYoutubeGate.isOpen) throw const UnofficialYoutubeBlocked();
         manifest = await _yt.videos.streamsClient.getManifest(widget.videoId);
         _ManifestCache.put(widget.videoId, manifest);
       }
@@ -361,6 +380,11 @@ class _SafeStreamYoutubePlayerState extends State<SafeStreamYoutubePlayer> {
       }
     } catch (e) {
       debugPrint('Error initializing SafeStreamYoutubePlayer: $e');
+      if (e is! UnofficialYoutubeBlocked) UnofficialYoutubeGate.trip(e);
+      if (widget.onLoadFailed != null) {
+        widget.onLoadFailed!();
+        return;
+      }
       if (mounted) {
         setState(() {
           _isLoading = false;
