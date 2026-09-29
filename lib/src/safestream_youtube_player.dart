@@ -85,6 +85,55 @@ class _ManifestCache {
   }
 }
 
+/// Language code of an audio track: YouTube ids look like `ar.3` or
+/// `en-US.4`; the part before the first `.`/`-` is the ISO 639-1 code.
+String? _trackLanguage(AudioOnlyStreamInfo t) {
+  final id = t.audioTrack?.id;
+  if (id == null || id.isEmpty) return null;
+  return id.split('.').first.split('-').first.toLowerCase();
+}
+
+/// Best-bitrate track in [language] that is *not* the video's original
+/// audio (the muxed stream — and the official player — already play that).
+AudioOnlyStreamInfo? _alternateTrackFor(Iterable<AudioOnlyStreamInfo> tracks, String language) {
+  final matches = tracks
+      .where((t) => _trackLanguage(t) == language && t.audioTrack?.audioIsDefault != true)
+      .toList()
+    ..sort((a, b) => b.bitrate.compareTo(a.bitrate));
+  return matches.isEmpty ? null : matches.first;
+}
+
+/// Answers "does this video have an alternate audio track in language X?"
+/// so [SafeStreamPlayer] can keep the official player unless the preferred
+/// language is really available. Shares [_ManifestCache] with the custom
+/// player, so a positive answer costs no second fetch; answers are cached.
+class SafeStreamAudioProbe {
+  SafeStreamAudioProbe._();
+
+  static final Map<String, bool> _answers = {};
+
+  /// Cached answer, or null when the video hasn't been probed yet.
+  static bool? cached(String videoId, String language) => _answers['$videoId|$language'];
+
+  static Future<bool> hasAlternateAudio(String videoId, String language) async {
+    final key = '$videoId|$language';
+    final known = _answers[key];
+    if (known != null) return known;
+
+    var manifest = _ManifestCache.get(videoId);
+    if (manifest == null) {
+      final yt = YoutubeExplode();
+      try {
+        manifest = await yt.videos.streamsClient.getManifest(videoId);
+        _ManifestCache.put(videoId, manifest);
+      } finally {
+        yt.close();
+      }
+    }
+    return _answers[key] = _alternateTrackFor(manifest.audioOnly, language) != null;
+  }
+}
+
 class _CachedManifest {
   final StreamManifest manifest;
   final DateTime fetchedAt;
@@ -100,6 +149,10 @@ class SafeStreamYoutubePlayer extends StatefulWidget {
   /// Custom controls drawn on top of the video.
   final Widget? controls;
 
+  /// ISO 639-1 code of the audio track to start with, when the video has an
+  /// alternate track in that language (e.g. set by a parent).
+  final String? preferredAudioLanguage;
+
   const SafeStreamYoutubePlayer({
     Key? key,
     required this.videoId,
@@ -107,6 +160,7 @@ class SafeStreamYoutubePlayer extends StatefulWidget {
     this.startAt,
     this.onControllerCreated,
     this.controls,
+    this.preferredAudioLanguage,
   }) : super(key: key);
 
   @override
@@ -167,6 +221,10 @@ class _SafeStreamYoutubePlayerState extends State<SafeStreamYoutubePlayer> {
 
       // Extract audio tracks
       _audioTracks = manifest.audioOnly.toList();
+      final preferred = widget.preferredAudioLanguage;
+      final AudioOnlyStreamInfo? initialTrack = _selectedAudioTrack == null && preferred != null
+          ? _alternateTrackFor(_audioTracks, preferred)
+          : null;
 
       // 2. Initialize VideoPlayerController with streaming headers to prevent throttling
       final newVideoController = VideoPlayerController.networkUrl(
@@ -231,6 +289,9 @@ class _SafeStreamYoutubePlayerState extends State<SafeStreamYoutubePlayer> {
       // Only attach audio sync listener if an alternate audio track is selected
       if (_selectedAudioTrack != null) {
         _audioPlayer ??= AudioPlayer();
+        // Re-init (quality switch) creates a fresh, unmuted video controller:
+        // keep its own audio silent or both soundtracks play together.
+        await _videoPlayerController!.setVolume(0);
         _videoPlayerController!.addListener(_syncAudioWithVideo);
       }
 
@@ -292,6 +353,11 @@ class _SafeStreamYoutubePlayerState extends State<SafeStreamYoutubePlayer> {
           _isLoading = false;
           _isSwitchingQuality = false;
         });
+      }
+
+      // Start in the preferred language when the video has it.
+      if (initialTrack != null && mounted) {
+        _onAudioTrackSelected(initialTrack);
       }
     } catch (e) {
       debugPrint('Error initializing SafeStreamYoutubePlayer: $e');
@@ -358,6 +424,12 @@ class _SafeStreamYoutubePlayerState extends State<SafeStreamYoutubePlayer> {
       _selectedAudioTrack = track;
       _isChangingAudio = true;
     });
+    // Keep the shared controller in sync (the overlay's language menu reads
+    // it), including when the track was picked automatically.
+    final adapter = _controllerAdapter;
+    if (adapter != null) {
+      adapter.value = adapter.value.copyWith(currentLanguage: track.audioTrack?.displayName);
+    }
 
     // Mute video track so alternate audio is heard
     await _videoPlayerController!.setVolume(0);
